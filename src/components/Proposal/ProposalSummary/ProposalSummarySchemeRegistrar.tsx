@@ -1,10 +1,10 @@
 import { IDAOState, IProposalState, IProposalType } from "@daostack/arc.js";
 import classNames from "classnames";
-import { getNetworkName, linkToEtherScan } from "lib/util";
+import { getNetworkByDAOAddress, linkToEtherScan } from "lib/util";
 import CopyToClipboard from "components/Shared/CopyToClipboard";
 import { schemeNameAndAddress } from "lib/schemeUtils";
 import * as React from "react";
-import { IProfileState } from "reducers/profilesReducer";
+import { IProfileState } from "@store/profiles/profilesReducer";
 import * as css from "./ProposalSummary.scss";
 
 interface IExternalProps {
@@ -23,20 +23,9 @@ type IProps = IExternalProps;
 
 export default class ProposalSummary extends React.Component<IProps, IState> {
 
-  constructor(props: IProps) {
-    super(props);
-    this.state = {
-      network: "",
-    };
-
-  }
-
-  public async componentDidMount(): Promise<void> {
-    this.setState({ network: (await getNetworkName()).toLowerCase() });
-  }
-
   public render(): RenderOutput {
     const { proposal, detailView, transactionModal } = this.props;
+    const network = getNetworkByDAOAddress(this.props.dao.address);
 
     const proposalSummaryClass = classNames({
       [css.detailView]: detailView,
@@ -55,7 +44,7 @@ export default class ProposalSummary extends React.Component<IProps, IState> {
             <span className={css.summaryTitle}>
               <img src="/assets/images/Icon/delete.svg" />&nbsp;
                   Remove Scheme&nbsp;
-              <a href={linkToEtherScan(schemeRegistrar.schemeToRemove)} target="_blank" rel="noopener noreferrer">{schemeNameAndAddress(schemeRegistrar.schemeToRemove)}</a>
+              <a href={linkToEtherScan(schemeRegistrar.schemeToRemove, network)} target="_blank" rel="noopener noreferrer">{schemeNameAndAddress(schemeRegistrar.schemeToRemove)}</a>
             </span>
             {detailView ?
               <div className={css.summaryDetails}>
@@ -63,7 +52,7 @@ export default class ProposalSummary extends React.Component<IProps, IState> {
                   <tr>
                     <th>
                       Address:
-                      <a href={linkToEtherScan(schemeRegistrar.schemeToRemove)} target="_blank" rel="noopener noreferrer">
+                      <a href={linkToEtherScan(schemeRegistrar.schemeToRemove, network)} target="_blank" rel="noopener noreferrer">
                         <img src="/assets/images/Icon/Link-blue.svg" />
                       </a>
                     </th>
@@ -79,7 +68,7 @@ export default class ProposalSummary extends React.Component<IProps, IState> {
               <span className={css.summaryTitle}>
                 <b className={css.schemeRegisterIcon}>{proposal.type === IProposalType.SchemeRegistrarEdit ? <img src="/assets/images/Icon/edit-sm.svg" /> : "+"}</b>&nbsp;
                 {proposal.type === IProposalType.SchemeRegistrarEdit ? "Edit" : "Add"} Scheme&nbsp;
-                <a href={linkToEtherScan(schemeRegistrar.schemeToRegister)} target="_blank" rel="noopener noreferrer">{schemeNameAndAddress(schemeRegistrar.schemeToRegister)}</a>
+                <a href={linkToEtherScan(schemeRegistrar.schemeToRegister, network)} target="_blank" rel="noopener noreferrer">{schemeNameAndAddress(schemeRegistrar.schemeToRegister)}</a>
               </span>
               {detailView ?
                 <div className={css.summaryDetails}>
@@ -88,7 +77,7 @@ export default class ProposalSummary extends React.Component<IProps, IState> {
                       <tr>
                         <th>
                           Address:
-                          <a href={linkToEtherScan(schemeRegistrar.schemeToRegister)} target="_blank" rel="noopener noreferrer">
+                          <a href={linkToEtherScan(schemeRegistrar.schemeToRegister, network)} target="_blank" rel="noopener noreferrer">
                             <img src="/assets/images/Icon/Link-blue.svg" />
                           </a>
                         </th>

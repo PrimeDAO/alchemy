@@ -3,13 +3,13 @@ import * as React from "react";
 
 import withSubscription, { ISubscriptionProps } from "components/Shared/withSubscription";
 
-import { ensureHttps, formatFriendlyDateForLocalTimezone, formatTokens} from "lib/util";
-import { IRootState } from "reducers";
+import { ensureHttps, formatFriendlyDateForLocalTimezone, formatTokens, getArcByDAOAddress } from "lib/util";
+import { IRootState } from "@store";
 import { connect } from "react-redux";
 import classNames from "classnames";
 import AccountPopup from "components/Account/AccountPopup";
 import AccountProfileName from "components/Account/AccountProfileName";
-import { IProfilesState } from "reducers/profilesReducer";
+import { IProfilesState } from "@store/profiles/profilesReducer";
 import { combineLatest, of } from "rxjs";
 import Tooltip from "rc-tooltip";
 import TagsSelector from "components/Proposal/Create/SchemeForms/TagsSelector";
@@ -123,7 +123,7 @@ class SubmissionDetails extends React.Component<IProps, null> {
 
         { tags && tags.length ?
           <div className={css.tagsContainer}>
-            <TagsSelector readOnly tags={tags}></TagsSelector>
+            <TagsSelector readOnly tags={tags} arc={getArcByDAOAddress(this.props.daoState.address)}></TagsSelector>
           </div> : "" }
 
         { submission.description ?
@@ -167,10 +167,11 @@ const SubmissionDetailsSubscription = withSubscription({
     /**
      * data comes from the cache created in Details
      */
+    const arc = getArcByDAOAddress(props.daoState.address);
     return combineLatest(
-      getSubmission(props.suggestionId, true),
-      getSubmissionVoterHasVoted(props.suggestionId, props.currentAccountAddress, true),
-      props.currentAccountAddress ? getCompetitionVotes(props.proposalState.id, props.currentAccountAddress, true) : of([])
+      getSubmission(props.suggestionId, true, arc),
+      getSubmissionVoterHasVoted(props.suggestionId, props.currentAccountAddress, true, arc),
+      props.currentAccountAddress ? getCompetitionVotes(props.proposalState.id, props.currentAccountAddress, true, arc) : of([])
     );
   },
 });

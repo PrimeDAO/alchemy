@@ -1,10 +1,42 @@
-## 1.0.3
+## 1.0.4
   - Features Added
-    - First loading speed improvement
-    - Pages loading process was split to several chunk which is improved UX
+    - Brand new Proposals Page
+
+  - Improvements
+    - Verify parameters hash
+    - Whitelist PrimeDAO Token
+    - Use subgraph v41_4 and arc.js 0.2.80
+    - Some UI/UX improvements
+    - Alchemy 2.0 banners are removed
 
   - Bugs Fixed
+    - Execute Calls button is displayed in Generic Scheme proposal before it passed
+    - Issue connecting to WalletConnect
+    - Can't create multi-call proposal in some cases due to old migration version
+
+  - Features Removed
+    - Dao History Page
+
+## 1.0.3
+  - Features Added
+    - Support multiple networks
+    - Select following and member DAOs from header
+    - Support an array of decimals in genericSchemeRegistry
+
+  - Improvements
+    - Better DAO name styles on sidebar
+    - Loading speed and vulnerabilities fixes
     - Integration tests typescript supporting was added
+    - Use subgraph v41_1 and arc.js 0.2.78
+    - Update BalancerPoolManager.json scheme
+
+  - Bugs Fixed
+    - Detect wallet network change in account menu
+    - Show missing GP params in competition schemes
+    - Added missing functionality for multi-call execute calls
+  
+  - Features Removed
+    - Feed Page
 
 ## 1.0.2
   - Features Added

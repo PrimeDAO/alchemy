@@ -6,18 +6,18 @@ import withSubscription, { ISubscriptionProps } from "components/Shared/withSubs
 import TagsSelector from "components/Proposal/Create/SchemeForms/TagsSelector";
 import TrainingTooltip from "components/Shared/TrainingTooltip";
 
-import { createProposal } from "actions/arcActions";
-import { showNotification, NotificationStatus } from "reducers/notifications";
+import { createProposal } from "@store/arc/arcActions";
+import { showNotification, NotificationStatus } from "@store/notifications/notifications.reducer";
 import Analytics from "lib/analytics";
-import { isValidUrl } from "lib/util";
+import { isValidUrl, getNetworkByDAOAddress, getArcByAddress, getArcByDAOAddress } from "lib/util";
 import { GetSchemeIsActiveActions, getSchemeIsActive, REQUIRED_SCHEME_PERMISSIONS, schemeNameAndAddress, SchemePermissions, schemeNameFromAddress } from "lib/schemeUtils";
 import { exportUrl, importUrlValues } from "lib/proposalUtils";
 import { ErrorMessage, Field, Form, Formik, FormikProps } from "formik";
 import classNames from "classnames";
-import { IProposalType, ISchemeState, Scheme } from "@daostack/arc.js";
+import Arc, { IProposalType, ISchemeState, Scheme } from "@daostack/arc.js";
 import { connect } from "react-redux";
 import * as React from "react";
-import * as css from "../CreateProposal.scss";
+import * as css from "components/Proposal/Create/CreateProposal.scss";
 import MarkdownField from "./MarkdownField";
 import HelpButton from "components/Shared/HelpButton";
 
@@ -103,17 +103,19 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
   }
 
   public handleChangeScheme = (e: any) => {
-    const arc = getArc();
     try {
+      const arc = getArcByAddress(e.target.value);
       // If we know about this contract then require the minimum permissions for it
-      const contractInfo = arc.getContractInfo(e.target.value);
-      this.setState({ requiredPermissions: REQUIRED_SCHEME_PERMISSIONS[contractInfo.name] });
+      if (arc !== undefined){
+        const contractInfo = arc.getContractInfo(e.target.value);
+        this.setState({ requiredPermissions: REQUIRED_SCHEME_PERMISSIONS[contractInfo.name] });
+      }
       /* eslint-disable-next-line no-empty */
     } catch (e) { }
   }
 
   public async handleSubmit(values: IFormValues, { setSubmitting }: any): Promise<void> {
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.daoAvatarAddress))) { return; }
 
     let permissions = 1;
     if (values.permissions.registerSchemes) {
@@ -161,7 +163,7 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
       tags: this.state.tags,
     };
     setSubmitting(false);
-    await this.props.createProposal(proposalValues);
+    await this.props.createProposal(proposalValues, this.props.daoAvatarAddress);
     Analytics.track("Submit Proposal", {
       "DAO Address": this.props.daoAvatarAddress,
       "Proposal Title": values.title,
@@ -193,6 +195,16 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
     this.props.showNotification(NotificationStatus.Success, "Exportable url is now in clipboard :)");
   }
 
+  private async verifyParametersHash(arc: Arc, schemeAddress: string, parametersHash: string): Promise<string | undefined> {
+    const parametersHashPattern = /0x([\da-f]){64}/i;
+    if (!parametersHashPattern.test(parametersHash)) {
+      return "Invalid parameters hash";
+    }
+    if (!(await arc.verifyParametersHash(schemeAddress, parametersHash))) {
+      return "Scheme parameters not set";
+    }
+  }
+
   public render(): RenderOutput {
     // "schemes" are the schemes registered in this DAO
     const schemes = this.props.data;
@@ -200,7 +212,7 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
 
     const { currentTab, requiredPermissions, showForm } = this.state;
 
-    const arc = getArc();
+    const arc = getArcByDAOAddress(this.props.daoAvatarAddress);
 
     const addSchemeButtonClass = classNames({
       [css.addSchemeButton]: true,
@@ -324,11 +336,6 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
                   errors.otherScheme = "Invalid address";
                 }
 
-                const parametersHashPattern = /0x([\da-f]){64}/i;
-                if (currentTab !== "removeScheme" && values.parametersHash && !parametersHashPattern.test(values.parametersHash)) {
-                  errors.parametersHash = "Invalid parameters hash";
-                }
-
                 if (!isValidUrl(values.url)) {
                   errors.url = "Invalid URL";
                 }
@@ -397,7 +404,7 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
                     </TrainingTooltip>
 
                     <div className={css.tagSelectorContainer}>
-                      <TagsSelector onChange={this.onTagsChange} tags={this.state.tags}></TagsSelector>
+                      <TagsSelector onChange={this.onTagsChange} tags={this.state.tags} arc={arc}></TagsSelector>
                     </div>
 
                     <TrainingTooltip overlay="Link to the fully detailed description of your proposal" placement="right">
@@ -458,7 +465,7 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
                         </Field>
                       </div>
 
-                      <div className={css.parametersHash}>
+                      {currentTab !== "removeScheme" && <div className={css.parametersHash}>
                         <label htmlFor="parametersHashInput">
                           <div className={css.requiredMarker}>*</div>
                           Parameters Hash
@@ -469,8 +476,10 @@ class CreateSchemeRegistrarProposal extends React.Component<IProps, IState> {
                           placeholder="e.g. 0x0000000000000000000000000000000000000000000000000000000000001234"
                           name="parametersHash"
                           className={touched.parametersHash && errors.parametersHash ? css.error : null}
+                          validate={async () => { return await this.verifyParametersHash(arc, values.schemeToAdd?values.schemeToAdd:values.schemeToEdit, values.parametersHash); }}
                         />
-                      </div>
+                      </div>}
+
                       <div className={css.permissions}>
                         <div className={css.permissionsLabel}>
                           Permissions
@@ -589,7 +598,7 @@ const SubscribedCreateSchemeRegistrarProposal = withSubscription({
   errorComponent: null,
   checkForUpdate: ["daoAvatarAddress"],
   createObservable: (props: IExternalProps) => {
-    const arc = getArc();
+    const arc = getArc(getNetworkByDAOAddress(props.daoAvatarAddress));
     return arc.dao(props.daoAvatarAddress).schemes({ where: { isRegistered: true } }, { fetchAllData: true });
   },
 });

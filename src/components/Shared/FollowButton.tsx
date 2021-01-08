@@ -1,20 +1,21 @@
-import { toggleFollow } from "actions/profilesActions";
+import { toggleFollow } from "@store/profiles/profilesActions";
 import { enableWalletProvider } from "arc";
 import classNames from "classnames";
 import ThreeboxModal from "components/Shared/ThreeboxModal";
 import Tooltip from "rc-tooltip";
 import * as React from "react";
 import { connect } from "react-redux";
-import { showNotification } from "reducers/notifications";
-import { IRootState } from "reducers";
-import { FollowType, IProfileState } from "reducers/profilesReducer";
-
+import { showNotification } from "@store/notifications/notifications.reducer";
+import { IRootState } from "@store";
+import { FollowType, IProfileState } from "@store/profiles/profilesReducer";
+import { Networks } from "lib/util";
 import * as css from "./FollowButton.scss";
 
 interface IExternalProps {
   id: string;
   type: FollowType;
   style?: "default" | "white" | "bigButton";
+  network: Networks;
 }
 
 interface IDispatchProps {
@@ -70,7 +71,7 @@ class FollowButton extends React.Component<IProps, IState> {
 
   private openThreeboxModal = async (e: any) => {
     e.preventDefault();
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, this.props.network)) { return; }
 
     // If they already have a saved threeBox from this session
     //  or 3box has cached their signature and doesnt need it again

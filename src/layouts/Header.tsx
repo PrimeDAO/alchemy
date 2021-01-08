@@ -1,15 +1,14 @@
-import * as uiActions from "actions/uiActions";
-import { threeBoxLogout } from "actions/profilesActions";
-import { enableWalletProvider, getAccountIsEnabled, getArc, logout, getWeb3ProviderInfo, getWeb3Provider, providerHasConfigUi } from "arc";
-import AccountBalances from "components/Account/AccountBalances";
+import * as uiActions from "@store/ui/uiActions";
+import { threeBoxLogout } from "@store/profiles/profilesActions";
+import { enableWalletProvider, getAccountIsEnabled, logout, getWeb3ProviderInfo, getWeb3Provider, providerHasConfigUi, getArcs } from "arc";
 import AccountImage from "components/Account/AccountImage";
 import AccountProfileName from "components/Account/AccountProfileName";
 import RedemptionsButton from "components/Redemptions/RedemptionsButton";
 import withSubscription, { ISubscriptionProps } from "components/Shared/withSubscription";
 import CopyToClipboard from "components/Shared/CopyToClipboard";
-import { IRootState } from "reducers";
-import { showNotification } from "reducers/notifications";
-import { IProfileState } from "reducers/profilesReducer";
+import { IRootState } from "@store";
+import { showNotification } from "@store/notifications/notifications.reducer";
+import { IProfileState } from "@store/profiles/profilesReducer";
 import TrainingTooltip from "components/Shared/TrainingTooltip";
 import { parse } from "query-string";
 import * as React from "react";
@@ -25,7 +24,8 @@ import { ETHDENVER_OPTIMIZATION } from "../settings";
 import * as css from "./App.scss";
 import ProviderConfigButton from "layouts/ProviderConfigButton";
 import Tooltip from "rc-tooltip";
-import { standardPolling, targetedNetwork } from "lib/util";
+import { standardPolling, getArcByDAOAddress, Networks } from "lib/util";
+import AccountBalances from "components/Account/AccountBalances";
 
 interface IExternalProps extends RouteComponentProps<any> {
 }
@@ -37,6 +37,7 @@ interface IStateProps {
   daoAvatarAddress: Address;
   menuOpen: boolean;
   threeBox: any;
+  network: Networks;
 }
 
 const mapStateToProps = (state: IRootState & IStateProps, ownProps: IExternalProps): IExternalProps & IStateProps => {
@@ -63,6 +64,7 @@ const mapStateToProps = (state: IRootState & IStateProps, ownProps: IExternalPro
     daoAvatarAddress: match && match.params ? (match.params as any).daoAvatarAddress : queryValues.daoAvatarAddress,
     menuOpen: state.ui.menuOpen,
     threeBox: state.profiles.threeBox,
+    network: state.web3.networkName as Networks,
   };
 };
 
@@ -118,14 +120,14 @@ class Header extends React.Component<IProps, null> {
     enableWalletProvider({
       suppressNotifyOnSuccess: true,
       showNotification: this.props.showNotification,
-    });
+    }, undefined);
   }
 
   public handleConnect = async (_event: any): Promise<void> => {
     enableWalletProvider({
       suppressNotifyOnSuccess: true,
       showNotification: this.props.showNotification,
-    });
+    }, undefined);
   }
 
   public handleClickLogout = async (_event: any): Promise<void> => {
@@ -168,6 +170,7 @@ class Header extends React.Component<IProps, null> {
     const {
       currentAccountProfile,
       currentAccountAddress,
+      network,
     } = this.props;
     const dao = this.props.data;
 
@@ -176,14 +179,9 @@ class Header extends React.Component<IProps, null> {
     const web3ProviderInfo = getWeb3ProviderInfo();
     const web3Provider = getWeb3Provider();
     const trainingTooltipsOn = this.getTrainingTooltipsEnabled();
-    const network = targetedNetwork();
-    const inDAO = !!daoAvatarAddress;
 
     return (
-      <div className={`${css.headerContainer} ${inDAO ? "" : css.showBanner}`}>
-        <div className={css.banner}>Alchemy 2.0 has been released! Take a look <a
-          href={(network === "main") ? process.env.ALCHEMY_V2_URL_MAINNET : process.env.ALCHEMY_V2_URL_XDAI}
-          target="_blank" rel="noopener noreferrer">here</a>.</div>
+      <div className={css.headerContainer}>
         <nav className={css.header}>
           <div className={css.menuToggle} onClick={this.handleToggleMenu}>
             {this.props.menuOpen ?
@@ -252,7 +250,15 @@ class Header extends React.Component<IProps, null> {
                       </Link>
                     </div>
                   </div>
-                  <AccountBalances dao={dao} address={currentAccountAddress} />
+                  {network &&
+                  <React.Fragment>
+                    <AccountBalances dao={dao ? dao : null} address={currentAccountAddress} network={network} arc={getArcs()[network]} />
+                    <div className={css.currentNetwork}>
+                      <div className={css.title}>Network</div>
+                      {network}
+                    </div>
+                  </React.Fragment>
+                  }
                   <div className={css.logoutButtonContainer}>
                     {accountIsEnabled ?
                       <div className={css.web3ProviderLogoutSection}>
@@ -303,7 +309,7 @@ const SubscribedHeader = withSubscription({
   checkForUpdate: ["daoAvatarAddress"],
   createObservable: (props: IProps) => {
     if (props.daoAvatarAddress) {
-      const arc = getArc();
+      const arc = getArcByDAOAddress(props.daoAvatarAddress);
       // subscribe if only to get DAO reputation supply updates
       return arc.dao(props.daoAvatarAddress).state(standardPolling());
     } else {

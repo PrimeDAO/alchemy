@@ -5,7 +5,7 @@ import AccountProfileName from "components/Account/AccountProfileName";
 import ProposalCountdown from "components/Shared/ProposalCountdown";
 import FollowButton from "components/Shared/FollowButton";
 import { DiscussionEmbed } from "disqus-react";
-import { humanProposalTitle, ensureHttps, formatFriendlyDateForLocalTimezone, safeMoment } from "lib/util";
+import { humanProposalTitle, ensureHttps, formatFriendlyDateForLocalTimezone, safeMoment, getArcByDAOAddress, getNetworkByDAOAddress } from "lib/util";
 import { schemeName } from "lib/schemeUtils";
 import Analytics from "lib/analytics";
 import { Page } from "pages";
@@ -73,8 +73,8 @@ class ProposalDetailsPage extends React.Component<IProps, IState> {
       "DAO Name": this.props.daoState.name,
       "Proposal Hash": this.props.proposal.id,
       "Proposal Title": this.props.proposal.title,
-      "Scheme Address": this.props.proposal.scheme.id,
-      "Scheme Name": this.props.proposal.scheme.name,
+      "Scheme Address": this.props.proposal.scheme?.id,
+      "Scheme Name": this.props.proposal.scheme?.name,
     });
 
     this.crxContractName = rewarderContractName(this.props.proposal.scheme);
@@ -135,7 +135,7 @@ class ProposalDetailsPage extends React.Component<IProps, IState> {
     }
     return (
       <div className={css.wrapper}>
-        <BreadcrumbsItem weight={1} to={`/dao/${daoState.address}/scheme/${proposal.scheme.id}`}>{schemeName(proposal.scheme, proposal.scheme.address)}</BreadcrumbsItem>
+        <BreadcrumbsItem weight={1} to={`/dao/${daoState.address}/scheme/${proposal.scheme?.id}`}>{schemeName(proposal.scheme, proposal.scheme?.address) ?? "Unknown"}</BreadcrumbsItem>
         <BreadcrumbsItem weight={2} to={`/dao/${daoState.address}/proposal/${proposal.id}`}>{humanProposalTitle(proposal, 40)}</BreadcrumbsItem>
         <div className={this.proposalClass} data-test-id={"proposal-" + proposal.id}>
           <div className={css.proposalInfo}>
@@ -209,7 +209,7 @@ class ProposalDetailsPage extends React.Component<IProps, IState> {
             </div>
 
             {tags && tags.length ? <div className={css.tagsContainer}>
-              <TagsSelector readOnly darkTheme tags={tags}></TagsSelector>
+              <TagsSelector readOnly darkTheme tags={tags} arc={getArcByDAOAddress(daoState.address)}></TagsSelector>
             </div> : ""}
 
             <div className={css.buttonBar}>
@@ -234,7 +234,7 @@ class ProposalDetailsPage extends React.Component<IProps, IState> {
                 <span>Share</span>
               </button>
 
-              <div className={css.followButton}><FollowButton type="proposals" id={proposal.id} style="bigButton" /></div>
+              <div className={css.followButton}><FollowButton type="proposals" id={proposal.id} style="bigButton" network={getNetworkByDAOAddress(daoState.address)} /></div>
             </div>
           </div>
 
@@ -347,6 +347,6 @@ class ProposalDetailsPage extends React.Component<IProps, IState> {
 export default function ProposalDetailsPageData(props: IExternalProps) {
   const { currentAccountAddress, daoState, proposalId } = props;
   return <ProposalData currentAccountAddress={currentAccountAddress} daoState={daoState} proposalId={proposalId}>
-    {proposalData => <ProposalDetailsPage {...props} {...proposalData} />}
+    {(proposalData: any) => <ProposalDetailsPage {...props} {...proposalData} />}
   </ProposalData>;
 }

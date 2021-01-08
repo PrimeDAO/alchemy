@@ -1,5 +1,5 @@
 import { Address, IDAOState, IMemberState, IProposalOutcome, IProposalStage, IProposalState } from "@daostack/arc.js";
-import { voteOnProposal } from "actions/arcActions";
+import { voteOnProposal } from "@store/arc/arcActions";
 import { enableWalletProvider } from "arc";
 
 import * as BN from "bn.js";
@@ -7,11 +7,11 @@ import classNames from "classnames";
 import Reputation from "components/Account/Reputation";
 import { ActionTypes, default as PreTransactionModal } from "components/Shared/PreTransactionModal";
 import Analytics from "lib/analytics";
-import { fromWei, targetedNetwork } from "lib/util";
+import { fromWei, getNetworkByDAOAddress } from "lib/util";
 import { Page } from "pages";
 import * as React from "react";
 import { connect } from "react-redux";
-import { showNotification } from "reducers/notifications";
+import { showNotification } from "@store/notifications/notifications.reducer";
 import * as css from "./VoteButtons.scss";
 
 interface IExternalProps {
@@ -56,7 +56,7 @@ class VoteButtons extends React.Component<IProps, IState> {
   }
 
   public handleClickVote = (vote: number) => async (): Promise<void> => {
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.dao.id))) { return; }
 
     const currentAccountState = this.props.currentAccountState;
     if (currentAccountState.reputation.gt(new BN(0))) {
@@ -103,7 +103,7 @@ class VoteButtons extends React.Component<IProps, IState> {
       (currentAccountState && currentAccountState.reputation.eq(new BN(0))) ||
       (currentAccountState && (proposal.createdAt < currentAccountState.createdAt) &&
         //this is a workaround till https://github.com/daostack/subgraph/issues/548
-        (targetedNetwork() !== "ganache")) ||
+        (getNetworkByDAOAddress(dao.address) !== "ganache")) ||
       currentVote === IProposalOutcome.Pass ||
       currentVote === IProposalOutcome.Fail
       ;

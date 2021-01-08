@@ -68,7 +68,7 @@ module.exports = merge(baseConfig, {
           { // compiles Sass to CSS
             loader: "sass-loader",
             options: {
-              sourceMap: true
+              sourceMap: true,
             }
           },
           { // Load global scss files in every other scss file without an @import needed
@@ -90,7 +90,7 @@ module.exports = merge(baseConfig, {
     new webpack.NamedModulesPlugin(),
 
     new webpack.EnvironmentPlugin({
-      NETWORK: "ganache",
+      NETWORKS: "ganache",
       NODE_ENV: "development",
       SHOW_ALL_DAOS: "true",
       BASE_URL: "http://127.0.0.1:3000",

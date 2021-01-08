@@ -1,14 +1,13 @@
 import { ISchemeState } from "@daostack/arc.js";
-import { getArc } from "arc";
-import { splitCamelCase } from "lib/util";
+import { splitCamelCase, getArcByDAOAddress } from "lib/util";
 
 export const hasRewarderContract = (schemeState: ISchemeState): boolean => {
-  return !!schemeState.contributionRewardExtParams && !!schemeState.contributionRewardExtParams.rewarder;
+  return !!schemeState?.contributionRewardExtParams && !!schemeState.contributionRewardExtParams.rewarder;
 };
 
 export const rewarderContractName = (schemeState: ISchemeState, useAlias = true): string => {
   if (hasRewarderContract(schemeState)) {
-    const contractInfo = getArc().getContractInfo(schemeState.contributionRewardExtParams.rewarder);
+    const contractInfo = getArcByDAOAddress(schemeState.dao)?.getContractInfo(schemeState.contributionRewardExtParams.rewarder);
     if (contractInfo) {
       return (useAlias && !!contractInfo.alias) ? contractInfo.alias : splitCamelCase(contractInfo.name);
     } else {

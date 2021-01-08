@@ -2,14 +2,13 @@ import { Member } from "@daostack/arc.js";
 import * as React from "react";
 import * as Autosuggest from "react-autosuggest";
 import { connect } from "react-redux";
-import { IRootState } from "reducers";
-import { IProfilesState, IProfileState } from "reducers/profilesReducer";
+import { IRootState } from "@store";
+import { IProfilesState, IProfileState } from "@store/profiles/profilesReducer";
 import { first } from "rxjs/operators";
-import { getArc } from "arc";
 import AccountImage from "components/Account/AccountImage";
 import Loading from "components/Shared/Loading";
 import withSubscription, { ISubscriptionProps } from "components/Shared/withSubscription";
-
+import { getArcByDAOAddress } from "lib/util";
 import * as css from "./UserSearchField.scss";
 
 interface IExternalProps {
@@ -146,7 +145,7 @@ const SubscribedUserSearchField = withSubscription({
   checkForUpdate: ["daoAvatarAddress"],
 
   createObservable: (props: IExternalProps) => {
-    const arc = getArc();
+    const arc = getArcByDAOAddress(props.daoAvatarAddress);
     return arc.dao(props.daoAvatarAddress).members();
   },
 });

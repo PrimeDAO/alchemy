@@ -1,16 +1,16 @@
 import { ISchemeState } from "@daostack/arc.js";
-import { createProposal } from "actions/arcActions";
+import { createProposal } from "@store/arc/arcActions";
 import { enableWalletProvider } from "arc";
 import { ErrorMessage, Field, Form, Formik, FormikProps, FieldArray } from "formik";
 import Analytics from "lib/analytics";
 import * as React from "react";
 import { connect } from "react-redux";
-import { showNotification, NotificationStatus } from "reducers/notifications";
-import { baseTokenName, isValidUrl, isAddress, linkToEtherScan, getContractName, toWei } from "lib/util";
+import { showNotification, NotificationStatus } from "@store/notifications/notifications.reducer";
+import { baseTokenName, isValidUrl, isAddress, linkToEtherScan, getContractName, toWei, getNetworkByDAOAddress, getArcByDAOAddress, Networks} from "lib/util";
 import { exportUrl, importUrlValues } from "lib/proposalUtils";
 import TagsSelector from "components/Proposal/Create/SchemeForms/TagsSelector";
 import TrainingTooltip from "components/Shared/TrainingTooltip";
-import * as css from "../CreateProposal.scss";
+import * as css from "components/Proposal/Create/CreateProposal.scss";
 import MarkdownField from "./MarkdownField";
 import HelpButton from "components/Shared/HelpButton";
 import { getABIByContract, extractABIMethods, encodeABI } from "./ABIService";
@@ -136,7 +136,7 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
   }
 
   public async handleSubmit(formValues: IFormValues, { setSubmitting }: any): Promise<void> {
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.daoAvatarAddress))) { return; }
 
     const contractsToCall = [];
     const callsData = [];
@@ -161,7 +161,7 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
     };
 
     setSubmitting(false);
-    await this.props.createProposal(proposalValues);
+    await this.props.createProposal(proposalValues, this.props.daoAvatarAddress);
 
     Analytics.track("Submit Proposal", {
       "DAO Address": this.props.daoAvatarAddress,
@@ -188,7 +188,7 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
  * If all checks are okay, pushes the contract address to the contract lists, otherwise returns an appropriate message.
  * @param {string} contractToCall
  */
-  private verifyContract = async (contractToCall: string) => {
+  private verifyContract = async (contractToCall: string, network: Networks) => {
     const addContractStatus: IAddContractStatus = {
       error: "",
       message: "",
@@ -207,7 +207,7 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
       setAddContractStatus("CONTRACT_EXIST", "Contract already exist!");
     } else {
       this.setState({ loading: true });
-      const abiData = await getABIByContract(contractToCall);
+      const abiData = await getABIByContract(contractToCall, network);
       const abiMethods = extractABIMethods(abiData);
       if (abiMethods.length > 0) {
         this.state.userContracts.push(contractToCall);
@@ -219,10 +219,10 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
     this.setState({ loading: false, addContractStatus: addContractStatus });
   }
 
-  private getContractABI = async (contractToCall: string, setFieldValue: any, index: number) => {
+  private getContractABI = async (contractToCall: string, setFieldValue: any, index: number, network: Networks) => {
     setFieldValue(`contracts.${index}.method`, ""); // reset
     setFieldValue(`contracts.${index}.callData`, ""); // reset
-    const abiData = await getABIByContract(contractToCall);
+    const abiData = await getABIByContract(contractToCall, network);
     const abiMethods = extractABIMethods(abiData);
     setFieldValue(`contracts.${index}.abi`, abiData);
     setFieldValue(`contracts.${index}.methods`, abiMethods);
@@ -255,10 +255,10 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
   public render(): RenderOutput {
     const { handleClose } = this.props;
     const { loading, addContractStatus, userContracts, whitelistedContracts } = this.state;
-
+    const network = getNetworkByDAOAddress(this.props.daoAvatarAddress);
     const contracts = whitelistedContracts.length > 0 ? whitelistedContracts : userContracts;
     const contractsOptions = contracts.map((address, index) => {
-      return <option key={index} value={address}>{getContractName(address)} ({address})</option>;
+      return <option key={index} value={address}>{getContractName(address, this.props.daoAvatarAddress)} ({address})</option>;
     });
 
     const fnDescription = () => (<span>Short description of the proposal.<ul><li>What are you proposing to do?</li><li>Why is it important?</li><li>How much will it cost the DAO?</li><li>When do you plan to deliver the work?</li></ul></span>);
@@ -348,7 +348,7 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
               </TrainingTooltip>
 
               <div className={css.tagSelectorContainer}>
-                <TagsSelector onChange={this.onTagsChange}></TagsSelector>
+                <TagsSelector onChange={this.onTagsChange} arc={getArcByDAOAddress(this.props.daoAvatarAddress)}></TagsSelector>
               </div>
 
               <TrainingTooltip overlay="Link to the fully detailed description of your proposal" placement="right">
@@ -376,13 +376,13 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
                   name="addContract"
                   type="text"
                   // eslint-disable-next-line react/jsx-no-bind
-                  onChange={(e: any) => { setFieldValue("addContract", e.target.value); this.verifyContract(e.target.value.toLowerCase()); }}
+                  onChange={(e: any) => { setFieldValue("addContract", e.target.value); this.verifyContract(e.target.value.toLowerCase(), network); }}
                   disabled={loading ? true : false}
                 />
                 {loading ? "Loading..." : addContractStatus.error === "ABI_DATA_ERROR" ?
                   <div>
                     {addContractStatus.message}
-                    <a href={linkToEtherScan(values.addContract)} target="_blank" rel="noopener noreferrer">contract</a>
+                    <a href={linkToEtherScan(values.addContract, getNetworkByDAOAddress(this.props.daoAvatarAddress))} target="_blank" rel="noopener noreferrer">contract</a>
                   </div> : addContractStatus.message}
               </div>}
 
@@ -398,11 +398,11 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
                           <div>
                             <label htmlFor={`contracts.${index}.value`}>
                               <div className={css.requiredMarker}>*</div>
-                              {baseTokenName()} Value
+                              {baseTokenName(network)} Value
                               <ErrorMessage name={`contracts.${index}.value`}>{(msg) => <span className={css.errorMessage}>{msg}</span>}</ErrorMessage>
                             </label>
                             <Field
-                              placeholder={`How much ${baseTokenName()} to transfer with the call`}
+                              placeholder={`How much ${baseTokenName(network)} to transfer with the call`}
                               name={`contracts.${index}.value`}
                               type="number"
                               validate={Validators.requireValue}
@@ -416,7 +416,7 @@ class CreateGenericMultiCallScheme extends React.Component<IProps, IStateProps> 
                               <ErrorMessage name={`contracts.${index}.address`}>{(msg) => <span className={css.errorMessage}>{msg}</span>}</ErrorMessage>
                             </label>
                             <Field // eslint-disable-next-line react/jsx-no-bind
-                              onChange={async (e: any) => { setFieldValue(`contracts.${index}.address`, e.target.value); await this.getContractABI(e.target.value, setFieldValue, index); }}
+                              onChange={async (e: any) => { setFieldValue(`contracts.${index}.address`, e.target.value); await this.getContractABI(e.target.value, setFieldValue, index, network); }}
                               component="select"
                               name={`contracts.${index}.address`}
                               type="text"

@@ -1,12 +1,12 @@
-import * as uiActions from "actions/uiActions";
-import { threeBoxLogout } from "actions/profilesActions";
-import { setCurrentAccount } from "actions/web3Actions";
+import * as uiActions from "@store/ui/uiActions";
+import { threeBoxLogout } from "@store/profiles/profilesActions";
+import { setCurrentAccount } from "@store/web3/web3Actions";
 import Notification, { NotificationViewStatus } from "components/Notification/Notification";
 import Analytics from "lib/analytics";
 import Header from "layouts/Header";
 import SidebarMenu from "layouts/SidebarMenu";
-import { IRootState } from "reducers";
-import { dismissNotification, INotificationsState, NotificationStatus, showNotification, INotification } from "reducers/notifications";
+import { IRootState } from "@store";
+import { dismissNotification, INotificationsState, NotificationStatus, showNotification, INotification } from "@store/notifications/notifications.reducer";
 import { getCachedAccount, cacheWeb3Info, logout, pollForAccountChanges } from "arc";
 import ErrorUncaught from "components/Errors/ErrorUncaught";
 import { parse } from "query-string";
@@ -20,16 +20,15 @@ import { History } from "history";
 import classNames from "classnames";
 import { captureException, withScope } from "@sentry/browser";
 import { Address } from "@daostack/arc.js";
-import { sortedNotifications } from "../selectors/notifications";
+import { sortedNotifications } from "@store/notifications/notifications";
 import * as css from "./App.scss";
 import SimpleMessagePopup, { ISimpleMessagePopupProps } from "components/Shared/SimpleMessagePopup";
-import { initializeUtils } from "lib/util";
+import { initializeUtils, getNetworkName } from "lib/util";
 
 const AccountProfilePage = lazy(() => import("components/Account/AccountProfilePage"));
 const DaosPage = lazy(() => import("components/Daos/DaosPage"));
 const DaoCreator = lazy(() => import("components/DaoCreator"));
 const DaoContainer = lazy(() => import("components/Dao/DaoContainer"));
-const FeedPage = lazy(() => import("components/Feed/FeedPage"));
 const RedemptionsPage = lazy(() => import("components/Redemptions/RedemptionsPage"));
 
 interface IExternalProps extends RouteComponentProps<any> {
@@ -137,6 +136,19 @@ class AppContainer extends React.Component<IProps, IState> {
 
     initializeUtils({ showSimpleMessage: this.showSimpleMessage });
 
+    if (window.ethereum) {
+      // Listen to network changes in MetaMask
+      window.ethereum.on("chainChanged", async (chainId: string) => {
+        this.props.setCurrentAccount(getCachedAccount(), await getNetworkName(chainId));
+      });
+      // TO DO: Listen to account changes in MetaMask instead of polling!
+      //window.ethereum.on("accountsChanged", (accounts: Array<any>) => {
+      // Handle the new accounts, or lack thereof.
+      // "accounts" will always be an array, but it can be empty.
+      // The current account is at accounts[0]
+      //});
+    }
+
     /**
      * Only supply currentAddress if it was obtained from a provider.  The poll
      * is only comparing changes with respect to the provider state.  Passing it a cached state
@@ -236,14 +248,12 @@ class AppContainer extends React.Component<IProps, IState> {
                   <Route path="/profile/:accountAddress" component={AccountProfilePage} />
                   <Route path="/redemptions" component={RedemptionsPage} />
                   <Route path="/daos" component={DaosPage} />
-                  <Route path="/feed" component={FeedPage} />
                   <Route path="/" component={DaosPage} />
                 </Switch>
               </Suspense>
             </div>
 
             <ModalContainer
-              backdropClassName={css.backdrop}
               containerClassName={css.modalContainer}
               bodyModalClassName={css.modalBody}
             />

@@ -1,18 +1,20 @@
+import { getWeb3ProviderInfo, getProviderNetworkName } from "arc";
 import * as Sentry from "@sentry/browser";
-import { getProfile } from "actions/profilesActions";
-import { getWeb3ProviderInfo } from "arc";
-import Analytics from "lib/analytics";
-import { ActionTypes, IWeb3State } from "reducers/web3Reducer";
-
 import * as Redux from "redux";
-import { IAsyncAction } from "./async";
+
+import Analytics from "lib/analytics";
+
+import { IAsyncAction } from "@store/async";
+import { getProfile } from "@store/profiles/profilesActions";
+import { ActionTypes, IWeb3State } from "@store/web3/web3Reducer";
 
 export type ConnectAction = IAsyncAction<"WEB3_CONNECT", void, IWeb3State>;
 
-export function setCurrentAccount(accountAddress: string) {
+export function setCurrentAccount(accountAddress: string, network?: string) {
   return async (dispatch: Redux.Dispatch<any, any>, _getState: Function) => {
     const payload = {
       currentAccountAddress: accountAddress,
+      networkName: network || await getProviderNetworkName(),
     };
 
     const action = {

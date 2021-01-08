@@ -14,11 +14,11 @@ import { Link } from "react-router-dom";
 import { CSSTransition, TransitionGroup } from "react-transition-group";
 import { Observable, combineLatest } from "rxjs";
 import { connect } from "react-redux";
-import { showNotification } from "reducers/notifications";
+import { showNotification } from "@store/notifications/notifications.reducer";
 import TrainingTooltip from "components/Shared/TrainingTooltip";
 import ProposalCard from "../Proposal/ProposalCard";
 import * as css from "./SchemeProposals.scss";
-import { standardPolling } from "lib/util";
+import { standardPolling, getNetworkByDAOAddress } from "lib/util";
 
 // For infinite scrolling
 const PAGE_SIZE_QUEUED = 100;
@@ -281,7 +281,7 @@ class SchemeProposalsPage extends React.Component<IProps, null> {
 
     return (
       <>
-        <BreadcrumbsItem to={`/dao/${daoState.address}/schemes`}>Proposal Plugins</BreadcrumbsItem>
+        <BreadcrumbsItem to={`/dao/${daoState.address}/schemes`}>Plugins</BreadcrumbsItem>
         <BreadcrumbsItem to={`/dao/${daoState.address}/scheme/${scheme.id}`}>{schemeFriendlyName}</BreadcrumbsItem>
 
         {(allProposals.length === 0)
@@ -341,7 +341,7 @@ const SubscribedSchemeProposalsPage = withSubscription<IProps, SubscriptionData>
   },
 
   createObservable: async (props: IExternalProps) => {
-    const arc = getArc();
+    const arc = getArc(getNetworkByDAOAddress(props.daoState.id));
     const dao = props.daoState.dao;
     const schemeId = props.scheme.id;
 

@@ -1,7 +1,6 @@
-import { IDAOState, Member } from "@daostack/arc.js";
-import { getProfilesForAddresses } from "actions/profilesActions";
-import { getArc } from "arc";
-import CreateProposalPage from "components/Proposal/Create/CreateProposalPage";
+import { IDAOState, Member, Scheme } from "@daostack/arc.js";
+import { getProfilesForAddresses } from "@store/profiles/profilesActions";
+import CreateProposalPage from "components/Proposal/Create";
 import ProposalDetailsPage from "components/Proposal/ProposalDetailsPage";
 import SchemeContainer from "components/Scheme/SchemeContainer";
 import Loading from "components/Shared/Loading";
@@ -11,19 +10,20 @@ import { BreadcrumbsItem } from "react-breadcrumbs-dynamic";
 import { Helmet } from "react-helmet";
 import { connect } from "react-redux";
 import { Route, RouteComponentProps, Switch } from "react-router-dom";
-//@ts-ignore
 import { ModalRoute } from "react-router-modal";
-import { IRootState } from "reducers";
-import { showNotification } from "reducers/notifications";
-import { IProfileState } from "reducers/profilesReducer";
+import { IRootState } from "@store";
+import { showNotification } from "@store/notifications/notifications.reducer";
+import { IProfileState } from "@store/profiles/profilesReducer";
 import DetailsPageRouter from "components/Scheme/ContributionRewardExtRewarders/DetailsPageRouter";
 import { combineLatest, Subscription } from "rxjs";
 import DaoSchemesPage from "./DaoSchemesPage";
-import DaoHistoryPage from "./DaoHistoryPage";
 import DaoMembersPage from "./DaoMembersPage";
 import * as css from "./Dao.scss";
-import DaoLandingPage from "components/Dao/DaoLandingPage";
-import { standardPolling, targetedNetwork } from "lib/util";
+import DaoProposalsPage from "components/Dao/DaoProposalsPage";
+import { standardPolling, getArcByDAOAddress, getDAONameByID, getNetworkByDAOAddress } from "lib/util";
+import gql from "graphql-tag";
+import { enableWalletProvider, getArcs } from "arc";
+import { getKnownSchemes } from "lib/schemeUtils";
 
 type IExternalProps = RouteComponentProps<any>;
 
@@ -31,6 +31,20 @@ interface IStateProps {
   currentAccountAddress: string;
   currentAccountProfile: IProfileState;
   daoAvatarAddress: string;
+  followingDaosAddresses: Array<any>;
+}
+
+enum PROPOSAL_WINDOW_TYPE {
+  PROPOSAL_LIST = "PROPOSAL_LIST",
+  SPECIFIC_PLUGIN = "SPECIFIC_PLUGIN",
+}
+
+interface IState {
+  memberDaos: Array<any>;
+  modalParentPath: string;
+  schemeId: string|null;
+  proposalWindowType: PROPOSAL_WINDOW_TYPE|null;
+  loading: boolean;
 }
 
 interface IDispatchProps {
@@ -38,7 +52,7 @@ interface IDispatchProps {
   showNotification: typeof showNotification;
 }
 
-type IProps = IExternalProps & IStateProps & IDispatchProps & ISubscriptionProps<[IDAOState, Member[]]>;
+type IProps = IExternalProps & IStateProps & IDispatchProps & ISubscriptionProps<[IDAOState, Member[], Scheme[]]>;
 
 const mapStateToProps = (state: IRootState, ownProps: IExternalProps): IExternalProps & IStateProps => {
   return {
@@ -46,6 +60,7 @@ const mapStateToProps = (state: IRootState, ownProps: IExternalProps): IExternal
     currentAccountAddress: state.web3.currentAccountAddress,
     currentAccountProfile: state.profiles[state.web3.currentAccountAddress],
     daoAvatarAddress: ownProps.match.params.daoAvatarAddress,
+    followingDaosAddresses: state.profiles[state.web3.currentAccountAddress]?.follows.daos,
   };
 };
 
@@ -54,16 +69,88 @@ const mapDispatchToProps = {
   showNotification,
 };
 
-class DaoContainer extends React.Component<IProps, null> {
+class DaoContainer extends React.Component<IProps, IState> {
+  constructor(props: IProps) {
+    super(props);
+    this.state = {
+      memberDaos: [],
+      modalParentPath: "/dao/:daoAvatarAddress",
+      schemeId: "",
+      proposalWindowType: null,
+      loading: false,
+    };
+  }
   public daoSubscription: any;
   public subscription: Subscription;
 
   public async componentDidMount() {
     // TODO: use this once 3box fixes Box.getProfiles
     //this.props.getProfilesForAddresses(this.props.data[1].map((member) => member.staticState.address));
+    const { followingDaosAddresses } = this.props;
+    const memberQuery = gql` query memberDaos {
+      reputationHolders (where: {
+        address: "${this.props.currentAccountAddress}"
+        ${(followingDaosAddresses && followingDaosAddresses.length) ? "dao_not_in: [" + followingDaosAddresses.map(dao => "\"" + dao + "\"").join(",") + "]" : ""}
+      }) {
+        dao {
+          id
+          name
+        }
+      }
+    }`;
+
+    const arcs = getArcs();
+    const memberDaosData = [];
+    for (const network in arcs) {
+      const arc = arcs[network];
+      const daos = await arc.sendQuery(memberQuery);
+      memberDaosData.push(daos.data.reputationHolders);
+    }
+    const memberDaos = [].concat(...memberDaosData).map(dao => {
+      return { id: dao.dao.id, name: dao.dao.name };
+    });
+    this.setState({ memberDaos: memberDaos });
   }
 
-  private daoHistoryRoute = (routeProps: any) => <DaoHistoryPage {...routeProps} daoState={this.props.data[0]} currentAccountAddress={this.props.currentAccountAddress} />;
+  componentDidUpdate(prevProps: IProps) {
+    if (this.props.data[0] !== prevProps.data[0]){
+      this.setState({ loading: false });
+    }
+  }
+
+  public handleNewProposal = async (schemeId?: string): Promise<void> => {
+    const { showNotification, daoAvatarAddress } = this.props;
+
+    if (!await enableWalletProvider({ showNotification }, getNetworkByDAOAddress(daoAvatarAddress))) { return; }
+
+    if (typeof schemeId === "string") {
+      this.setState(() => ({
+        modalParentPath: "/dao/:daoAvatarAddress/scheme/:schemeId",
+        schemeId,
+        proposalWindowType: PROPOSAL_WINDOW_TYPE.SPECIFIC_PLUGIN,
+      }), () => {
+        this.props.history.push(`/dao/${daoAvatarAddress}/scheme/${schemeId}/proposals/create/`);
+      });
+    } else {
+      this.setState(() => ({
+        modalParentPath: "/dao/:daoAvatarAddress",
+        schemeId: "",
+        proposalWindowType: PROPOSAL_WINDOW_TYPE.PROPOSAL_LIST,
+      }), () => {
+        this.props.history.push(`/dao/${daoAvatarAddress}/proposals/create`);
+      });
+    }
+  };
+
+  public handleProposalWindowClose = (parentPath: string) => {
+    const { history } = this.props;
+    history.push(parentPath);
+    this.setState({
+      schemeId: "",
+      proposalWindowType: null,
+    });
+  }
+
   private daoMembersRoute = (routeProps: any) => <DaoMembersPage {...routeProps} daoState={this.props.data[0]} />;
   private daoProposalRoute = (routeProps: any) =>
     <ProposalDetailsPage {...routeProps}
@@ -78,64 +165,110 @@ class DaoContainer extends React.Component<IProps, null> {
       proposalId={routeProps.match.params.proposalId}
     />;
 
-  private schemeRoute = (routeProps: any) => <SchemeContainer {...routeProps} daoState={this.props.data[0]} currentAccountAddress={this.props.currentAccountAddress} />;
+  private schemeRoute = (routeProps: any) => (
+    <SchemeContainer
+      {...routeProps}
+      daoState={this.props.data[0]}
+      currentAccountAddress={this.props.currentAccountAddress}
+      onCreateProposal={this.handleNewProposal}
+    />
+  );
   private daoSchemesRoute = (routeProps: any) => <DaoSchemesPage {...routeProps} daoState={this.props.data[0]} />;
-  private daoLandingRoute = (_routeProps: any) => <DaoLandingPage daoState={this.props.data[0]} />;
-  private modalRoute = (route: any) => `/dao/${route.params.daoAvatarAddress}/scheme/${route.params.schemeId}/`;
+  private daoProposalsRoute = (routeProps: any) => (
+    <DaoProposalsPage
+      {...routeProps}
+      daoState={this.props.data[0]}
+      schemesLength={getKnownSchemes(this.props.data[2]).length}
+      currentAccountAddress={this.props.currentAccountAddress}
+      onCreateProposal={this.handleNewProposal}
+    />
+  );
+  private createProposalRoute = (routeProps: any) => (
+    <CreateProposalPage
+      {...routeProps}
+      onBackToParent={this.handleProposalWindowClose}
+      dao={this.props.data[0].dao}
+      currentAccountAddress={this.props.currentAccountAddress}
+    />
+  );
+  private modalRouteCreateProposal = (route: any) => {
+    return this.state.modalParentPath
+      .replace(":daoAvatarAddress", route.params.daoAvatarAddress)
+      .replace(":schemeId", this.state.schemeId);
+  };
+  private onFollwingDaosListChange = (daoAddress: string, history: any) => {
+    this.setState({ loading: true });
+    history.push(`/dao/${daoAddress}`);
+  };
 
   public render(): RenderOutput {
     const daoState = this.props.data[0];
-    const network = targetedNetwork();
+    const { followingDaosAddresses } = this.props;
+    const { memberDaos, loading } = this.state;
+
+    const followingDaos = followingDaosAddresses?.filter(address => getDAONameByID(address) !== undefined)
+    .map(daoAddress => {
+      return { id: daoAddress, name: getDAONameByID(daoAddress) };
+    });
+
+    const myDaos = followingDaos?.concat(memberDaos);
+    const currentDaoAddress = window.location.pathname.split("/")[2];
+    const myDaosAddresses = [] as any;
+    const myDaosOptions = myDaos?.map(dao => {
+      myDaosAddresses.push(dao.id);
+      return <option key={dao.id} selected={dao.id === currentDaoAddress ? true : false} value={dao.id}>{dao.name}</option>;
+    });
+
+    if (!myDaosAddresses.includes(daoState.id)){
+      myDaosOptions?.push(<option key={daoState.id} selected value={daoState.id}>{daoState.name}</option>);
+    }
 
     return (
       <div className={css.outer}>
         <BreadcrumbsItem to="/daos/">All DAOs</BreadcrumbsItem>
-        <BreadcrumbsItem to={"/dao/" + daoState.address}>{daoState.name}</BreadcrumbsItem>
+        {/* A BreadcrumbsItem position is determined according the path depth, so it has to be at least /daos/. In order to prevent redirection we use preventDefault */}
+        <BreadcrumbsItem onClick={(e: any) => { e.preventDefault(); }} to="/daos/"><select className={css.follwingDaosList} onChange={(e) => this.onFollwingDaosListChange(e.target.value, this.props.history)}>{myDaosOptions}</select></BreadcrumbsItem>
         <Helmet>
           <meta name="description" content={daoState.name + " | Managed on Alchemy by DAOstack"} />
           <meta name="og:description" content={daoState.name + " | Managed on Alchemy by DAOstack"} />
           <meta name="twitter:description" content={daoState.name + " | Managed on Alchemy by DAOstack"} />
         </Helmet>
 
-        <div className={css.wrapper}>
-          <div className={css.noticeWrapper}>
-            <div className={css.noticeBuffer}></div>
-            <div className={css.notice}>Alchemy 2.0 has been released! Take a look <a
-              href={(network === "main") ? process.env.ALCHEMY_V2_URL_MAINNET : process.env.ALCHEMY_V2_URL_XDAI}
-              target="_blank" rel="noopener noreferrer">here</a>.
-            </div>
-          </div>
+        {!loading ? <div className={css.wrapper}>
           <Switch>
-            <Route exact path="/dao/:daoAvatarAddress"
-              render={this.daoLandingRoute} />
-            <Route exact path="/dao/:daoAvatarAddress/history"
-              render={this.daoHistoryRoute} />
             <Route exact path="/dao/:daoAvatarAddress/members"
               render={this.daoMembersRoute} />
 
             <Route exact path="/dao/:daoAvatarAddress/proposal/:proposalId"
-              render={this.daoProposalRoute}
-            />
+              render={this.daoProposalRoute} />
 
             <Route path="/dao/:daoAvatarAddress/crx/proposal/:proposalId"
               render={this.daoCrxProposalRoute} />
 
-            <Route path="/dao/:daoAvatarAddress/scheme/:schemeId"
+            <Route exact={this.state.proposalWindowType === PROPOSAL_WINDOW_TYPE.PROPOSAL_LIST} path="/dao/:daoAvatarAddress/scheme/:schemeId"
               render={this.schemeRoute} />
 
             <Route exact path="/dao/:daoAvatarAddress/schemes"
               render={this.daoSchemesRoute} />
 
-            <Route path="/dao/:daoAvatarAddress" render={this.daoLandingRoute} />
+            <Route path="/dao/:daoAvatarAddress"
+              render={this.daoProposalsRoute}
+            />
           </Switch>
 
           <ModalRoute
-            path="/dao/:daoAvatarAddress/scheme/:schemeId/proposals/create"
-            parentPath={this.modalRoute}
-            component={CreateProposalPage}
+            path="/dao/:daoAvatarAddress/proposals/create"
+            parentPath={this.modalRouteCreateProposal}
+            component={this.createProposalRoute}
           />
 
-        </div>
+          <ModalRoute
+            path="/dao/:daoAvatarAddress/scheme/:schemeId/proposals/create"
+            parentPath={this.modalRouteCreateProposal}
+            component={this.createProposalRoute}
+          />
+
+        </div> : <Loading />}
       </div>
     );
   }
@@ -147,12 +280,13 @@ const SubscribedDaoContainer = withSubscription({
   errorComponent: (props) => <div>{props.error.message}</div>,
   checkForUpdate: ["daoAvatarAddress"],
   createObservable: (props: IExternalProps) => {
-    const arc = getArc();
     const daoAddress = props.match.params.daoAvatarAddress;
+    const arc = getArcByDAOAddress(daoAddress);
     const dao = arc.dao(daoAddress);
     const observable = combineLatest(
       dao.state(standardPolling(true)), // DAO state
-      dao.members()
+      dao.members(),
+      dao.schemes({ where: { isRegistered: true } }, standardPolling(true)),
     );
     return observable;
   },

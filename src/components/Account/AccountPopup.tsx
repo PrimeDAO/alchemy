@@ -1,6 +1,6 @@
 import { Address, IDAOState, IMemberState } from "@daostack/arc.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { getProfile } from "actions/profilesActions";
+import { getProfile } from "@store/profiles/profilesActions";
 import AccountImage from "components/Account/AccountImage";
 import AccountProfileName from "components/Account/AccountProfileName";
 import Reputation from "components/Account/Reputation";
@@ -9,12 +9,14 @@ import withSubscription, { ISubscriptionProps } from "components/Shared/withSubs
 import CopyToClipboard, { IconColor } from "components/Shared/CopyToClipboard";
 import * as React from "react";
 import { connect } from "react-redux";
-import { IRootState } from "reducers";
-import { IProfileState } from "reducers/profilesReducer";
+import { IRootState } from "@store";
+import { IProfileState } from "@store/profiles/profilesReducer";
 
 import * as BN from "bn.js";
 
 import * as css from "./Account.scss";
+import { getNetworkByDAOAddress } from "lib/util";
+
 
 
 interface IExternalProps {
@@ -90,7 +92,7 @@ class AccountPopup extends React.Component<IProps, null> {
           </div>
 
           <div>
-            <FollowButton type="users" id={this.props.accountAddress} />
+            <FollowButton type="users" id={this.props.accountAddress} network={getNetworkByDAOAddress(daoState.address)} />
           </div>
 
           <div className={css.holdings}>

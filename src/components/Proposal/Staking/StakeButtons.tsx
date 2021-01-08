@@ -1,19 +1,19 @@
 import { Address, IDAOState, IProposalOutcome, IProposalStage, IProposalState, Stake } from "@daostack/arc.js";
-import { approveStakingGens, stakeProposal } from "actions/arcActions";
+import { approveStakingGens, stakeProposal } from "@store/arc/arcActions";
 import { enableWalletProvider } from "arc";
 
 import * as BN from "bn.js";
 import classNames from "classnames";
 import Analytics from "lib/analytics";
-import { formatTokens } from "lib/util";
+import { formatTokens, getNetworkByDAOAddress } from "lib/util";
 import { ActionTypes, default as PreTransactionModal } from "components/Shared/PreTransactionModal";
 import { Page } from "pages";
 import Tooltip from "rc-tooltip";
 import * as React from "react";
 import { connect } from "react-redux";
 import { Modal } from "react-router-modal";
-import { showNotification } from "reducers/notifications";
-import { IProfileState } from "reducers/profilesReducer";
+import { showNotification } from "@store/notifications/notifications.reducer";
+import { IProfileState } from "@store/profiles/profilesReducer";
 
 import * as css from "./StakeButtons.scss";
 
@@ -63,7 +63,7 @@ class StakeButtons extends React.Component<IProps, IState> {
   }
 
   public showApprovalModal = async (_event: any): Promise<void> => {
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.dao.address))) { return; }
 
     this.setState({ showApproveModal: true });
   }
@@ -77,7 +77,7 @@ class StakeButtons extends React.Component<IProps, IState> {
   }
 
   public showPreStakeModal = (prediction: number): (_event: any) => void => async (_event: any): Promise<void> => {
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.dao.address))) { return; }
     this.setState({ pendingPrediction: prediction, showPreStakeModal: true });
   }
 
@@ -86,10 +86,10 @@ class StakeButtons extends React.Component<IProps, IState> {
   }
 
   public handleClickPreApprove = async (_event: any): Promise<void> => {
-    if (!await enableWalletProvider({ showNotification: this.props.showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.dao.address))) { return; }
 
     const { approveStakingGens } = this.props;
-    approveStakingGens(this.props.proposal.votingMachine);
+    approveStakingGens(this.props.proposal.votingMachine, this.props.dao.id);
 
     Analytics.track("Enable predictions");
 
@@ -169,7 +169,6 @@ class StakeButtons extends React.Component<IProps, IState> {
       [css.predictions]: true,
       [css.detailView]: parentPage === Page.ProposalDetails,
       [css.contextMenu]: contextMenu,
-      [css.historyView]: parentPage === Page.DAOHistory,
       [css.unconfirmedPrediction]: isPredicting,
     });
 

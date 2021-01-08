@@ -1,15 +1,14 @@
 import { Address, IDAOState, IMemberState, IProposalState, IRewardState, Reward, Stake, Vote } from "@daostack/arc.js";
-import { getArc } from "arc";
-import { ethErrorHandler, ethBalance, standardPolling } from "lib/util";
+import { ethErrorHandler, ethBalance, standardPolling, getArcByDAOAddress } from "lib/util";
 
 import * as BN from "bn.js";
 import withSubscription, { ISubscriptionProps } from "components/Shared/withSubscription";
 import * as moment from "moment";
 import * as React from "react";
 import { connect } from "react-redux";
-import { IRootState } from "reducers";
+import { IRootState } from "@store";
 import { closingTime } from "lib/proposalHelpers";
-import { IProfileState } from "reducers/profilesReducer";
+import { IProfileState } from "@store/profiles/profilesReducer";
 import { combineLatest, concat, of, Observable } from "rxjs";
 import { map, mergeMap } from "rxjs/operators";
 
@@ -109,14 +108,14 @@ const ConnectedProposalData = connect(mapStateToProps, null)(ProposalData);
 export default withSubscription({
   wrappedComponent: ConnectedProposalData,
   // TODO: we might want a different one for each child component, how to pass in to here?
-  loadingComponent: (props) => <div className={css.loading}>Loading proposal {props.proposalId.substr(0, 6)} ...</div>,
+  loadingComponent: (props: any) => <div className={css.loading}>Loading proposal {props.proposalId.substr(0, 6)} ...</div>,
   // TODO: we might want a different one for each child component, how to pass in to here?
   errorComponent: (props) => <div>{props.error.message}</div>,
 
   checkForUpdate: ["currentAccountAddress", "proposalId"],
 
   createObservable: async (props) => {
-    const arc = getArc();
+    const arc = getArcByDAOAddress(props.daoState.id);
     const { currentAccountAddress, daoState, proposalId } = props;
     const arcDao = daoState.dao;
     const proposal = arc.proposal(proposalId);
@@ -138,7 +137,7 @@ export default withSubscription({
         // TODO: also need the member state for the proposal proposer and beneficiary
         //      but since we need the proposal state first to get those addresses we will need to
         //      update the arc.js query to load them inline
-        concat(of(new BN("0")), ethBalance(daoState.address))
+        concat(of(new BN("0")), ethBalance(daoState.address, getArcByDAOAddress(daoState.address)))
           .pipe(ethErrorHandler()),
         arc.GENToken().balanceOf(currentAccountAddress)
           .pipe(ethErrorHandler()),
@@ -152,7 +151,7 @@ export default withSubscription({
         of([]), // stakes
         of(null), // rewards
         of(null), // current account member state
-        concat(of(new BN(0)), ethBalance(daoState.address)) // dao eth balance
+        concat(of(new BN(0)), ethBalance(daoState.address, getArcByDAOAddress(daoState.address))) // dao eth balance
           .pipe(ethErrorHandler()),
         of(new BN(0)), // current account gen balance
         of(null), // current account GEN allowance

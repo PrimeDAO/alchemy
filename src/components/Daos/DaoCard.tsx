@@ -3,6 +3,7 @@ import classNames from "classnames";
 import FollowButton from "components/Shared/FollowButton";
 import withSubscription, { ISubscriptionProps } from "components/Shared/withSubscription";
 import { generate } from "geopattern";
+import { getNetworkByDAOAddress } from "lib/util";
 import * as moment from "moment";
 import * as React from "react";
 import { Link } from "react-router-dom";
@@ -35,17 +36,12 @@ const DaoCard = (props: IProps) => {
         [css.dao]: true,
         [css.daoInactive]: inActive})}>
         <div className={css.daoTitle}
-          style={{backgroundImage: bgPattern.toDataUrl()}}>
-
+          style={{backgroundColor: bgPattern.color}}>
           <div className={css.daoName}>{daoState.name}</div>
-
+          <FollowButton id={dao.id} type="daos" style="white" network={getNetworkByDAOAddress(daoState.address)} />
           {inActive ? <div className={css.inactiveFeedback} ><div className={css.time}>{ dxDaoActivationDate.format("MMM Do")}&nbsp;
             {dxDaoActivationDate.format("h:mma z")}</div><img src="/assets/images/Icon/alarm.svg"></img></div> : ""}
         </div>
-
-        <span className={css.followButton}>
-          <FollowButton id={dao.id} type="daos" style="white" />
-        </span>
 
         <div className={"clearfix " + css.daoInfoContainer}>
           <table className={css.daoInfoContainer}>

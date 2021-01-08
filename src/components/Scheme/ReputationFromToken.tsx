@@ -5,18 +5,18 @@ import { getWeb3Provider, getArcSettings } from "arc";
 import { soliditySHA3 } from "ethereumjs-abi";
 import { parse } from "query-string";
 import { RouteComponentProps } from "react-router-dom";
-import { NotificationStatus } from "reducers/notifications";
-import { redeemReputationFromToken } from "actions/arcActions";
+import { NotificationStatus } from "@store/notifications/notifications.reducer";
+import { redeemReputationFromToken } from "@store/arc/arcActions";
 import { enableWalletProvider, getArc } from "arc";
 import { ErrorMessage, Field, Form, Formik, FormikProps } from "formik";
-import { fromWei } from "lib/util";
+import { fromWei, getArcByDAOAddress, getNetworkByDAOAddress } from "lib/util";
 import { schemeName } from "lib/schemeUtils";
 import * as React from "react";
 import { BreadcrumbsItem } from "react-breadcrumbs-dynamic";
 import * as Sticky from "react-stickynode";
 import { connect } from "react-redux";
-import { IRootState } from "reducers";
-import { showNotification } from "reducers/notifications";
+import { IRootState } from "@store";
+import { showNotification } from "@store/notifications/notifications.reducer";
 import * as schemeCss from "./Scheme.scss";
 import * as css from "./ReputationFromToken.scss";
 
@@ -70,7 +70,7 @@ class ReputationFromToken extends React.Component<IProps, IState> {
     const queryValues = parse(this.props.location.search);
     let pk = queryValues["pk"] as string;
     if (pk) {
-      const arc = getArc();
+      const arc = getArc(getNetworkByDAOAddress(this.props.daoAvatarAddress));
       if (!pk.startsWith("0x")) {
         pk = `0x${pk}`;
       }
@@ -96,7 +96,7 @@ class ReputationFromToken extends React.Component<IProps, IState> {
     if (redeemerAddress) {
       const schemeState = this.props.schemeState;
       const schemeAddress = schemeState.address;
-      const arc = getArc();
+      const arc = getArc(getNetworkByDAOAddress(this.props.daoAvatarAddress));
       const schemeContract = await arc.getContract(schemeAddress);
       const tokenContractAddress = await schemeContract.methods.tokenContract().call();
       const tokenContract = new Token(tokenContractAddress, arc);
@@ -135,14 +135,14 @@ class ReputationFromToken extends React.Component<IProps, IState> {
   public async handleSubmit(values: IFormValues, { _props, setSubmitting, _setErrors }: any): Promise<void> {
     // only connect to wallet if we do not have a private key to sign with
     if (!this.state.privateKey &&
-      !await enableWalletProvider({ showNotification: this.props.showNotification })) {
+      !await enableWalletProvider({ showNotification: this.props.showNotification }, getNetworkByDAOAddress(this.props.daoAvatarAddress))) {
       setSubmitting(false);
       return;
     }
 
     const schemeState = this.props.schemeState;
     const schemeAddress = schemeState.address;
-    const arc = getArc();
+    const arc = getArcByDAOAddress(this.props.daoAvatarAddress);
     const schemeContract = await arc.getContract(schemeAddress);
     const alreadyRedeemed = await schemeContract.methods.redeems(this.state.redeemerAddress).call();
     if (alreadyRedeemed) {
@@ -195,7 +195,7 @@ class ReputationFromToken extends React.Component<IProps, IState> {
       // send the transaction and get notifications
       if (contract) {
         // more information on this service is here: https://github.com/dOrgTech/TxPayerService
-        const txServiceUrl = getArcSettings().txSenderServiceUrl;
+        const txServiceUrl = getArcSettings(getNetworkByDAOAddress(this.props.daoAvatarAddress)).txSenderServiceUrl;
         const data = {
           to: schemeState.address,
           methodAbi: {
@@ -270,8 +270,9 @@ class ReputationFromToken extends React.Component<IProps, IState> {
   public render(): RenderOutput {
     const { daoAvatarAddress, schemeState, currentAccountAddress } = this.props;
     const redeemerAddress = this.state.redeemerAddress;
+    const network = getNetworkByDAOAddress(daoAvatarAddress);
+    const arc = getArc(network);
 
-    const arc = getArc();
 
     return (
       <div className={schemeCss.schemeContainer}>
@@ -344,7 +345,7 @@ class ReputationFromToken extends React.Component<IProps, IState> {
                     <img src="/assets/images/Icon/redeem.svg"/> Redeem
                   </button>
                 </div>
-                { getArcSettings().txSenderServiceUrl ?
+                { getArcSettings(network).txSenderServiceUrl ?
                   <div className={schemeCss.redemptionButton}>
                     <div>Or try our new experimental feature:</div>
                     <button type="submit"

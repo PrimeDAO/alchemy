@@ -1,6 +1,6 @@
 .wrapper {
   position: relative;
-  display: inline-block;
+  display: flex;
 
   button {
     background-color: rgba(0, 118, 255, 1);
@@ -35,10 +35,6 @@
     width: 67px;
   }
 
-  button.executeButton:hover,
-  &.expanded button.executeButton {
-    width: 86px;
-  }
 }
 
 .wrapper.detailView {
@@ -68,6 +64,7 @@
 div.tooltipWhenDisabledContainer {
   display: "inline-block";
   cursor: "not-allowed";
+  margin: 0px 5px;
 }
 
 .redeemButton {
@@ -106,8 +103,7 @@ div.tooltipWhenDisabledContainer {
   color: $white;
   line-height: 30px;
   padding: 0 15px;
-  margin-top: 0;
-  margin-bottom: 15px;
+  margin: 0px 5px;
   font-size: 13px;
   font-weight: bold;
 }

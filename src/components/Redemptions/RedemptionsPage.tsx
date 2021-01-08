@@ -1,33 +1,34 @@
 import { Address, DAOFieldsFragment, IContributionReward, IDAOState, IRewardState, Proposal } from "@daostack/arc.js";
-import { enableWalletProvider, getArc } from "arc";
-import { redeemProposal } from "actions/arcActions";
-
+import { enableWalletProvider, getArcs } from "arc";
+import { redeemProposal } from "@store/arc/arcActions";
 import * as BN from "bn.js";
 import Loading from "components/Shared/Loading";
 import withSubscription, { ISubscriptionProps } from "components/Shared/withSubscription";
 import gql from "graphql-tag";
 import Analytics from "lib/analytics";
 import { createDaoStateFromQuery, IDAOData } from "lib/daoHelpers";
-import { baseTokenName, formatTokens, genName, standardPolling, tokenDecimals, tokenSymbol } from "lib/util";
+import { baseTokenName, formatTokens, genName, getArcByDAOAddress, getNetworkByDAOAddress, standardPolling, tokenDecimals, tokenSymbol, Networks } from "lib/util";
 import { Page } from "pages";
 import * as React from "react";
 import { BreadcrumbsItem } from "react-breadcrumbs-dynamic";
 import { connect } from "react-redux";
 import * as Sticky from "react-stickynode";
-import { IRootState } from "reducers";
-import { showNotification } from "reducers/notifications";
-import { of } from "rxjs";
-import { map } from "rxjs/operators";
+import { IRootState } from "@store";
+import { showNotification } from "@store/notifications/notifications.reducer";
+import { of, concat } from "rxjs";
+import { map, first } from "rxjs/operators";
 import ProposalCard from "../Proposal/ProposalCard";
 import * as css from "./RedemptionsPage.scss";
 
 interface IStateProps {
   currentAccountAddress: string;
+  network: Networks;
 }
 
 const mapStateToProps = (state: IRootState) => {
   return {
     currentAccountAddress: state.web3.currentAccountAddress,
+    network: state.web3.networkName,
   };
 };
 
@@ -89,7 +90,7 @@ class RedemptionsPage extends React.Component<IProps, null> {
                   onClick={this.redeemAll}
                 >
                   <img src="/assets/images/Icon/redeem.svg" />
-                Redeem all
+                Redeem {this.props.network && `all from ${this.props.network}`}
                 </button>
               </div>
               : ""
@@ -119,17 +120,17 @@ class RedemptionsPage extends React.Component<IProps, null> {
       showNotification,
     } = this.props;
 
-    if (!await enableWalletProvider({ showNotification })) { return; }
+    if (!await enableWalletProvider({ showNotification }, this.props.network)) { return; }
 
     proposals.forEach(proposal => {
-      redeemProposal(proposal.dao.id, proposal.id, currentAccountAddress);
+      if (getNetworkByDAOAddress(proposal.dao.id) === this.props.network) {
+        redeemProposal(proposal.dao.id, proposal.id, currentAccountAddress);
+      }
     });
   }
 
   private renderProposalsPerDAO(): RenderOutput[] {
     const { currentAccountAddress, data: proposals } = this.props;
-
-    const arc = getArc();
 
     const daoStatePerAddress = new Map<Address, IDAOState>();
     const proposalsPerDao = new Map<Address, IProposalData[]>();
@@ -139,7 +140,7 @@ class RedemptionsPage extends React.Component<IProps, null> {
       }
       proposalsPerDao.get(proposal.dao.id).push(proposal);
       if (!daoStatePerAddress.get(proposal.dao.id)) {
-        daoStatePerAddress.set(proposal.dao.id, createDaoStateFromQuery(proposal.dao));
+        daoStatePerAddress.set(proposal.dao.id, createDaoStateFromQuery(proposal.dao, getNetworkByDAOAddress(proposal.dao.id)));
       }
     });
 
@@ -153,7 +154,7 @@ class RedemptionsPage extends React.Component<IProps, null> {
               key={"proposal_" + proposal.id}
               currentAccountAddress={currentAccountAddress}
               daoState={daoState}
-              proposal={new Proposal(proposal.id, arc)}
+              proposal={new Proposal(proposal.id, getArcByDAOAddress(daoAddress))}
             />;
           })}
         </div>
@@ -162,8 +163,7 @@ class RedemptionsPage extends React.Component<IProps, null> {
   }
 
   private renderTotalRewards(): RenderOutput {
-    const { currentAccountAddress, data: proposals } = this.props;
-
+    const { network, currentAccountAddress, data: proposals } = this.props;
     const genReward = new BN(0);
     const ethReward = new BN(0);
     const externalTokenRewards: { [symbol: string]: BN } = {};
@@ -208,10 +208,10 @@ class RedemptionsPage extends React.Component<IProps, null> {
 
     const totalRewards: any[] = [];
     if (!ethReward.isZero()) {
-      totalRewards.push(formatTokens(ethReward, baseTokenName()));
+      totalRewards.push(formatTokens(ethReward, baseTokenName(network)));
     }
     if (!genReward.isZero()) {
-      totalRewards.push(formatTokens(genReward, genName()));
+      totalRewards.push(formatTokens(genReward, genName(network)));
     }
     Object.keys(externalTokenRewards).forEach((tokenAddress) => {
       totalRewards.push(formatTokens(externalTokenRewards[tokenAddress], tokenSymbol(tokenAddress), tokenDecimals(tokenAddress)));
@@ -240,12 +240,14 @@ const SubscribedRedemptionsPage = withSubscription({
       return of(null);
     }
 
-    const arc = getArc();
+    const proposals = [];
+    const arcs = getArcs();
     const query = gql`query proposalsWithUnclaimedRewards
       {
         proposals(
           where: {
-            accountsWithUnclaimedRewards_contains: ["${currentAccountAddress}"]
+            accountsWithUnclaimedRewards_contains: ["${currentAccountAddress}"],
+            stage_in:["Executed"]
           },
           orderBy: closingAt
         ) {
@@ -276,9 +278,11 @@ const SubscribedRedemptionsPage = withSubscription({
       }
       ${DAOFieldsFragment}
     `;
-    const proposals = arc.getObservable(query, standardPolling())
-      .pipe(map((result: any) => result.data.proposals));
-    return proposals;
+    for (const network in arcs) {
+      proposals.push(arcs[network].getObservable(query, standardPolling())
+        .pipe(map((result: any) => result.data.proposals)));
+    }
+    return concat(proposals).pipe(first()).toPromise();
   },
 });
 
